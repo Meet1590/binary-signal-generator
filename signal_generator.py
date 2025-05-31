@@ -75,29 +75,36 @@ def predict_signals(model_dir, data, timeframes=['1min', '3min', '5min']):
         target_col = f"trend_{timeframe}"
         model_path = os.path.join(model_dir, f'lstm_{target_col}.pth')
         scaler_path = os.path.join(model_dir, f'scaler_{target_col}.pkl')
-        config_path = os.path.join(model_dir, 'config.json')
+        config_path = os.path.join(model_dir, f'config_{target_col}.json')
         
         # Check if model exists
-        if not os.path.exists(model_path) or not os.path.exists(scaler_path):
-            print(f"Model for {timeframe} not found. Skipping...")
+        if not os.path.exists(model_path) or not os.path.exists(scaler_path) or not os.path.exists(config_path):
+            print(f"Model files for {timeframe} not found. Skipping...")
             continue
             
-        # Load model and scaler
-        model, scaler, config = load_model(model_path, scaler_path, config_path)
-        model = model.to(device)
-        
-        # Prepare input
-        feature_cols = config['feature_cols']
-        window_size = config['window_size']
-        
-        # Create input sequence
         try:
+            # Load model and scaler
+            model, scaler, config = load_model(model_path, scaler_path, config_path)
+            model = model.to(device)
+            
+            # Prepare input
+            feature_cols = config['feature_cols']
+            window_size = config['window_size']
+            
+            # Validate that required features exist in data
+            missing_features = [col for col in feature_cols if col not in data.columns]
+            if missing_features:
+                print(f"Missing features for {timeframe}: {missing_features}. Skipping...")
+                continue
+            
+            # Create input sequence
             input_seq = prepare_input_sequence(data, feature_cols, scaler, window_size)
             
             # Generate signal
             signal = generate_signal(model, input_seq, timeframe, device)
             signals.append(signal)
             print(f"Generated signal for {timeframe}: {signal['signal']} with confidence {signal['confidence']:.4f}")
+            
         except Exception as e:
             print(f"Error generating signal for {timeframe}: {str(e)}")
     

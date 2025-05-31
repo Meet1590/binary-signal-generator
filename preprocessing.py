@@ -36,13 +36,21 @@ def combine_text_files(text_file_directory):
     """
     Combine all text files in a directory into one file
     """
+    output_file = f'{text_file_directory}/combined_txt_file.txt'
+    
+    # Remove existing combined file to avoid appending to old data
+    if os.path.exists(output_file):
+        os.remove(output_file)
+    
     all_files = os.listdir(text_file_directory)
-    with open(f'{text_file_directory}/combined_txt_file.txt', 'a') as file:
+    with open(output_file, 'w') as file:  # Changed from 'a' to 'w'
         for a_file in all_files:
             if a_file != 'combined_txt_file.txt':  # Skip the output file if it exists
-                with open(f'{text_file_directory}/{a_file}', 'r') as temp_file:
-                    file.write(temp_file.read() + '\n')
-    return f'{text_file_directory}/combined_txt_file.txt'
+                file_path = f'{text_file_directory}/{a_file}'
+                if os.path.isfile(file_path):  # Ensure it's a file
+                    with open(file_path, 'r') as temp_file:
+                        file.write(temp_file.read() + '\n')
+    return output_file
 
 def parse_gap_report(file_path):
     """
@@ -66,7 +74,7 @@ def handling_gaps(clean_df, gap_file_path=None):
     if gap_file_path:
         gaps = parse_gap_report(gap_file_path)
         # Forward fill small gaps (<= 300s) at 1-minute level
-        clean_df = clean_df.asfreq('1T')
+        clean_df = clean_df.asfreq('1T').fillna(method='ffill')
         # Flag large gaps (> 300s)
         for gap in gaps:
             if gap['duration_s'] > 300:
@@ -74,7 +82,7 @@ def handling_gaps(clean_df, gap_file_path=None):
                 clean_df.loc[gap['start']:gap['end']] = None
     else:
         # Forward fill all gaps if no gap report
-        clean_df = clean_df.asfreq('1T', method='ffill')    
+        clean_df = clean_df.asfreq('1T').fillna(method='ffill')
     return clean_df
 
 def create_labels(df):
@@ -93,23 +101,25 @@ def create_labels(df):
     df.loc[:, 'label_1min'] = np.select(conditions, choices, default=0)
     df.loc[df.index[0], 'label_1min'] = 0
 
-    # 3 minutes candle labels
-    prev_close_3_min = df['close'].shift(2)
+    # 3 minutes candle labels - Fixed: should be shift(3) for 3 minutes
+    prev_close_3_min = df['close'].shift(3)
     conditions = [
         df['close'] > prev_close_3_min,
         df['close'] < prev_close_3_min
     ]
     df.loc[:, 'label_3min'] = np.select(conditions, choices, default=0)
-    df.loc[df.index[0], 'label_3min'] = 0
+    # Set first 3 values to 0 since they don't have proper comparison
+    df.loc[df.index[:3], 'label_3min'] = 0
 
-    # 5 minutes candle labels
-    prev_close_5_min = df['close'].shift(4)
+    # 5 minutes candle labels - Fixed: should be shift(5) for 5 minutes
+    prev_close_5_min = df['close'].shift(5)
     conditions = [
         df['close'] > prev_close_5_min,
         df['close'] < prev_close_5_min 
     ]
     df.loc[:, 'label_5min'] = np.select(conditions, choices, default=0)
-    df.loc[df.index[0], 'label_5min'] = 0
+    # Set first 5 values to 0 since they don't have proper comparison
+    df.loc[df.index[:5], 'label_5min'] = 0
 
     return df
 

@@ -220,6 +220,9 @@ def generate_signal(model, input_data, target_timeframe, device):
 
 def save_model(model, scaler, model_path, scaler_path, config):
     """Save model and related data"""
+    # Create directory if it doesn't exist
+    os.makedirs(os.path.dirname(model_path), exist_ok=True)
+    
     # Save model state
     torch.save(model.state_dict(), model_path)
     
@@ -227,12 +230,17 @@ def save_model(model, scaler, model_path, scaler_path, config):
     import joblib
     joblib.dump(scaler, scaler_path)
     
-    # Save configuration
-    with open(os.path.join(os.path.dirname(model_path), 'config.json'), 'w') as f:
-        json.dump(config, f)
+    # Save configuration with unique name for each target
+    config_dir = os.path.dirname(model_path)
+    target_col = config.get('target_col', 'unknown')
+    config_file = os.path.join(config_dir, f'config_{target_col}.json')
+    
+    with open(config_file, 'w') as f:
+        json.dump(config, f, indent=2)
     
     print(f"Model saved to {model_path}")
     print(f"Scaler saved to {scaler_path}")
+    print(f"Config saved to {config_file}")
 
 
 def load_model(model_path, scaler_path, config_path=None):
@@ -252,8 +260,9 @@ def load_model(model_path, scaler_path, config_path=None):
         num_classes=config['num_classes']
     )
     
-    # Load model state
-    model.load_state_dict(torch.load(model_path))
+    # Load model state with proper device mapping
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
     
     # Load scaler
